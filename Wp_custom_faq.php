@@ -18,9 +18,10 @@ function wp_custom_faq_enqueue_assets() {
         // Enqueue Bootstrap CSS
         wp_enqueue_style('wp-custom-faq-bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', [], '5.3.0');
 
-        // Enqueue custom CSS
-        $css_handle = 'wp-custom-faq-styles-' . wp_generate_uuid4();
-        wp_enqueue_style($css_handle, false);
+        // Register and enqueue custom CSS handle to attach inline styles reliably
+        $css_handle = 'wp-custom-faq-styles';
+        wp_register_style($css_handle, false, [], null);
+        wp_enqueue_style($css_handle);
         wp_add_inline_style($css_handle, '
             .wp-custom-faq-wrapper, .wp-custom-faq-wrapper .wp-custom-faq-container, 
             .wp-custom-faq-wrapper .container, .wp-block-preformatted .wp-custom-faq-wrapper {
