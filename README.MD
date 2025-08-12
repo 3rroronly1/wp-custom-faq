@@ -1,4 +1,4 @@
-wp Custom FAQ 🚀
+wp Custom FAQ 🚀 (v1.6)
 
 A lightweight WordPress plugin by 3rroronly1 that creates a customizable, accordion-style FAQ section. It replicates a specific HTML design using Bootstrap 5.3 with toggleable sections, +/− icons, and color transitions.
 Features 🌟
@@ -6,6 +6,10 @@ Features 🌟
     Accordion FAQ 📋 – Single-open accordion with +/− icons matching the provided HTML design.
 
     Customizable Colors 🎨 – Change collapsed/expanded background and text colors, plus icon color via the settings page.
+
+    Visual Editor for Questions and Answers ✍️ – GUI-based formatting: bold, italic, bullets, links, line breaks. Questions allow safe inline formatting; answers support rich content.
+
+    Custom per-section CSS (optional) 🧩 – Add extra CSS declarations for question/answer elements from the settings page if needed.
 
     Shortcode Support 🔗 – Use [wp_custom_faq] in posts, pages, or widgets.
 
@@ -29,6 +33,8 @@ Usage 📖
 
     Add/edit/remove FAQ items.
 
+    Format questions and answers with the visual editor (bold, italic, bullet/numbered lists, links). Line breaks and spacing are preserved.
+
     Customize colors for collapsed/expanded states and icons.
 
     Save changes.
@@ -47,9 +53,9 @@ Troubleshooting 🔍
 
     Accordion not collapsing: Check console for errors, disable conflicting plugins, ensure Bootstrap is loaded.
 
-    Styling issues: Ensure shortcode is in a Shortcode block, not Preformatted/Code.
+    Styling issues: Ensure shortcode is in a Shortcode block, not Preformatted/Code. Clear caching/minification plugins after updates.
 
-    Inspect for theme CSS overrides if styles look wrong.
+    Spacing lost in questions when formatting: the plugin preserves whitespace using CSS. If needed, add a space around formatted text or use a non-breaking space (&nbsp;).
 
 License 📜
 
