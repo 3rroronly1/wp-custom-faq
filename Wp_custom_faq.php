@@ -2,7 +2,7 @@
 /*
 Plugin Name: wp_Custom_faq
 Description: A custom WordPress FAQ plugin by 3rroronly1 that creates an accordion-style FAQ section matching the provided HTML design exactly. Use shortcode [wp_custom_faq] in a Shortcode block to display. Customize FAQs and colors in the settings page.
-Version: 1.5
+Version: 1.6
 Author: 3rroronly1
 */
 
@@ -55,6 +55,16 @@ function wp_custom_faq_enqueue_assets() {
                 top: 50%;
                 transform: translateY(-50%);
                 background-image: none !important;
+            }
+            /* Preserve visual spacing around inline formatted elements in question */
+            .wp-custom-faq-container .accordion-button b,
+            .wp-custom-faq-container .accordion-button strong,
+            .wp-custom-faq-container .accordion-button em,
+            .wp-custom-faq-container .accordion-button i,
+            .wp-custom-faq-container .accordion-button u,
+            .wp-custom-faq-container .accordion-button span {
+                margin-left: 0.15em;
+                margin-right: 0.15em;
             }
             .wp-custom-faq-container .accordion-button:not(.collapsed) {
                 background-color: ' . esc_attr(get_option('wp_custom_faq_expanded_bg', '#9bc329')) . ' !important;
@@ -146,14 +156,34 @@ function wp_custom_faq_sanitize_items($input) {
     if (is_array($input)) {
         foreach ($input as $item) {
             if (!empty($item['question']) && !empty($item['answer'])) {
+                $question_raw = (string) $item['question'];
+                $question_normalized = preg_replace("/[\r\n]+/", ' ', $question_raw);
+                $question_normalized = preg_replace('/\s{2,}/', ' ', $question_normalized);
                 $sanitized[] = [
-                    'question' => sanitize_text_field($item['question']),
-                    'answer' => wp_kses_post($item['answer'])
+                    'question' => wp_kses($question_normalized, wp_custom_faq_allowed_question_tags()),
+                    'answer' => wp_kses_post((string) $item['answer'])
                 ];
             }
         }
     }
     return $sanitized;
+}
+
+// Allowed inline tags for question content (inside the accordion button)
+function wp_custom_faq_allowed_question_tags() {
+    return [
+        'br' => [],
+        'em' => [],
+        'strong' => [],
+        'b' => [],
+        'i' => [],
+        'u' => [],
+        'small' => [],
+        'span' => [
+            'style' => true,
+            'class' => true,
+        ],
+    ];
 }
 
 // Settings page
@@ -181,11 +211,45 @@ function wp_custom_faq_settings_page() {
                         <div class="faq-item">
                             <p>
                                 <label>Question:</label><br>
-                                <input type="text" name="wp_custom_faq_items[<?php echo $index; ?>][question]" value="<?php echo esc_attr($item['question']); ?>" style="width: 100%;">
+                                <?php
+                                $question_editor_id = 'wp_custom_faq_question_' . intval($index);
+                                wp_editor(
+                                    (string) $item['question'],
+                                    $question_editor_id,
+                                    [
+                                        'textarea_name' => 'wp_custom_faq_items[' . intval($index) . '][question]',
+                                        'textarea_rows' => 3,
+                                        'media_buttons' => false,
+                                        'quicktags' => [ 'buttons' => 'strong,em' ],
+                                        'tinymce' => [
+                                            'toolbar1' => 'bold,italic,undo,redo',
+                                            'menubar' => false,
+                                            'wpautop' => false,
+                                        ],
+                                        'teeny' => true,
+                                    ]
+                                );
+                                ?>
                             </p>
                             <p>
                                 <label>Answer:</label><br>
-                                <textarea name="wp_custom_faq_items[<?php echo $index; ?>][answer]" style="width: 100%; height: 100px;"><?php echo esc_textarea($item['answer']); ?></textarea>
+                                <?php
+                                $answer_editor_id = 'wp_custom_faq_answer_' . intval($index);
+                                wp_editor(
+                                    (string) $item['answer'],
+                                    $answer_editor_id,
+                                    [
+                                        'textarea_name' => 'wp_custom_faq_items[' . intval($index) . '][answer]',
+                                        'textarea_rows' => 7,
+                                        'media_buttons' => false,
+                                        'quicktags' => true,
+                                        'tinymce' => [
+                                            'toolbar1' => 'bold,italic,bullist,numlist,undo,redo,link,unlink',
+                                            'menubar' => false,
+                                        ],
+                                    ]
+                                );
+                                ?>
                             </p>
                             <button type="button" class="remove-faq button">Remove</button>
                             <hr>
@@ -232,11 +296,27 @@ function wp_custom_faq_settings_page() {
             // Add new FAQ item
             $('#add-faq').click(function() {
                 var index = $('.faq-item').length;
+                var qId = 'wp_custom_faq_question_' + index;
+                var aId = 'wp_custom_faq_answer_' + index;
                 var html = '<div class="faq-item">' +
-                    '<p><label>Question:</label><br><input type="text" name="wp_custom_faq_items[' + index + '][question]" style="width: 100%;"></p>' +
-                    '<p><label>Answer:</label><br><textarea name="wp_custom_faq_items[' + index + '][answer]" style="width: 100%; height: 100px;"></textarea></p>' +
+                    '<p><label>Question:</label><br>' +
+                    '<textarea id="' + qId + '" name="wp_custom_faq_items[' + index + '][question]"></textarea></p>' +
+                    '<p><label>Answer:</label><br>' +
+                    '<textarea id="' + aId + '" name="wp_custom_faq_items[' + index + '][answer]"></textarea></p>' +
                     '<button type="button" class="remove-faq button">Remove</button><hr></div>';
                 $('#faq-items').append(html);
+                if (window.wp && wp.editor && typeof wp.editor.initialize === 'function') {
+                    wp.editor.initialize(qId, {
+                        tinymce: { toolbar1: 'bold italic undo redo', menubar: false, wpautop: false },
+                        quicktags: { buttons: 'strong,em' },
+                        mediaButtons: false
+                    });
+                    wp.editor.initialize(aId, {
+                        tinymce: { toolbar1: 'bold italic bullist numlist undo redo link unlink', menubar: false },
+                        quicktags: true,
+                        mediaButtons: false
+                    });
+                }
             });
 
             // Remove FAQ item
@@ -279,7 +359,13 @@ function wp_custom_faq_shortcode() {
                                 <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                                     data-bs-target="#collapse<?php echo esc_attr($unique_id); ?>" aria-expanded="false"
                                     aria-controls="collapse<?php echo esc_attr($unique_id); ?>">
-                                    <?php echo esc_html($item['question']); ?>
+                                    <?php
+                                        $q = (string) $item['question'];
+                                        // Prevent whitespace collapse around inline tags
+                                        $q = preg_replace('/\s*<\/(strong|b|em|i|u)>\s*/i', ' </$1> ', $q);
+                                        $q = preg_replace('/\s*<(strong|b|em|i|u)([^>]*)>\s*/i', ' <$1$2> ', $q);
+                                        echo wp_kses($q, wp_custom_faq_allowed_question_tags());
+                                    ?>
                                 </button>
                             </h2>
                             <div id="collapse<?php echo esc_attr($unique_id); ?>" class="accordion-collapse collapse"
