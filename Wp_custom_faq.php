@@ -2,7 +2,7 @@
 /*
 Plugin Name: wp_Custom_faq
 Description: A custom WordPress FAQ plugin by 3rroronly1 that creates an accordion-style FAQ section matching the provided HTML design exactly. Use shortcode [wp_custom_faq] in a Shortcode block to display. Customize FAQs and colors in the settings page.
-Version: 1.6
+Version: 1.7
 Author: 3rroronly1
 */
 
@@ -18,6 +18,19 @@ function wp_custom_faq_enqueue_assets() {
         // Enqueue Bootstrap CSS
         wp_enqueue_style('wp-custom-faq-bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css', [], '5.3.0');
 
+        // Enqueue Tailwind (scoped, no preflight) with a safe prefix to avoid conflicts
+        wp_enqueue_script('wp-custom-faq-tailwind', 'https://cdn.tailwindcss.com', [], null, true);
+        // Configure Tailwind BEFORE it loads to avoid preflight and use a unique prefix
+        wp_add_inline_script(
+            'wp-custom-faq-tailwind',
+            'window.tailwind = window.tailwind || {};\n' .
+            'tailwind.config = {\n' .
+            '  corePlugins: { preflight: false },\n' .
+            '  prefix: "tw-"\n' .
+            '};',
+            'before'
+        );
+
         // Register and enqueue custom CSS handle to attach inline styles reliably
         $css_handle = 'wp-custom-faq-styles';
         wp_register_style($css_handle, false, [], null);
@@ -32,12 +45,32 @@ function wp_custom_faq_enqueue_assets() {
             .wp-custom-faq-container .accordion {
                 margin: 0 !important;
                 padding: 0 !important;
+                border: 0 !important;
+                outline: 0 !important;
+                box-shadow: none !important;
+                background: transparent !important;
+                /* Bootstrap 5 accordion variables (scoped) */
+                --bs-accordion-border-width: 0;
+                --bs-accordion-border-color: transparent;
+                --bs-accordion-inner-border-radius: 0;
+                --bs-accordion-btn-focus-box-shadow: none;
+                --bs-accordion-btn-focus-border-color: transparent;
             }
             .wp-custom-faq-container .accordion-item {
-                border: 1px solid #dee2e6;
-                border-radius: 0.25rem;
-                margin-bottom: 2px !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                margin-bottom: 0 !important;
                 padding: 0 !important;
+                outline: 0 !important;
+                box-shadow: none !important;
+                background: transparent !important;
+            }
+            .wp-custom-faq-container .accordion-header { 
+                margin: 0 !important; 
+                border: 0 !important; 
+                outline: 0 !important; 
+                box-shadow: none !important; 
+                background: transparent !important; 
             }
             .wp-custom-faq-container .accordion-button {
                 background-color: ' . esc_attr(get_option('wp_custom_faq_collapsed_bg', '#ffffff')) . ' !important;
@@ -45,6 +78,11 @@ function wp_custom_faq_enqueue_assets() {
                 font-weight: bold;
                 position: relative;
                 padding: 0.75rem 1.25rem !important;
+                border: 0 !important;
+                box-shadow: none !important;
+                outline: none !important;
+                border-color: transparent !important;
+                background-image: none !important;
             }
             .wp-custom-faq-container .accordion-button::after {
                 content: "+";
@@ -69,6 +107,8 @@ function wp_custom_faq_enqueue_assets() {
             .wp-custom-faq-container .accordion-button:not(.collapsed) {
                 background-color: ' . esc_attr(get_option('wp_custom_faq_expanded_bg', '#9bc329')) . ' !important;
                 color: ' . esc_attr(get_option('wp_custom_faq_expanded_text', '#ffffff')) . ' !important;
+                border: 0 !important;
+                box-shadow: none !important;
             }
             .wp-custom-faq-container .accordion-button:not(.collapsed)::after {
                 content: "−";
@@ -81,25 +121,128 @@ function wp_custom_faq_enqueue_assets() {
             .wp-custom-faq-container .accordion-body {
                 color: #000000 !important;
                 padding: 0.75rem 1.25rem !important;
+                ' . ((($bg = get_option('wp_custom_faq_answer_bg', '')) !== '') ? ('background-color: ' . esc_attr($bg) . ' !important;') : '') . '
+                visibility: visible !important;
+            }
+            .wp-custom-faq-container .accordion-collapse { 
+                border: 0 !important; 
+                outline: 0 !important; 
+                box-shadow: none !important; 
+                background: transparent !important; 
+                /* Keep it simple and reliable across themes */
+                display: none !important;
+                overflow: hidden !important;
+            }
+            .wp-custom-faq-container .accordion-collapse.show { 
+                display: block !important; 
+                overflow: visible !important;
+            }
+            .wp-custom-faq-container .accordion-collapse.show .accordion-body {
+                display: block !important;
+            }
+            .wp-custom-faq-container .accordion-button.collapsed { border-bottom: 0 !important; }
+            .wp-custom-faq-container .accordion-body { 
+                border: 0 !important; 
+                outline: 0 !important; 
+                box-shadow: none !important; 
+                border-top: 0 !important; 
+                border-bottom: 0 !important; 
+            }
+            /* Safety net: remove any residual borders inside the accordion scope */
+            .wp-custom-faq-container .accordion *,
+            .wp-custom-faq-container .container {
+                border-color: transparent !important;
             }
         ');
 
-        // Enqueue Bootstrap JS and custom initialization script
-        wp_enqueue_script('wp-custom-faq-bootstrap', 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js', ['jquery'], '5.3.0', true);
-        wp_enqueue_script('wp-custom-faq-init', false, ['wp-custom-faq-bootstrap'], false, true);
+        // Do NOT enqueue our own Bootstrap JS to avoid conflicts with themes/plugins.
+        // Rely on existing Bootstrap if present; otherwise, use a small conflict-free toggler.
+        // Properly register a dummy handle so inline script is printed reliably
+        wp_register_script('wp-custom-faq-init', '', ['jquery'], null, true);
+        wp_enqueue_script('wp-custom-faq-init');
         wp_add_inline_script('wp-custom-faq-init', '
             (function($) {
                 $(document).ready(function() {
                     try {
-                        $(".wp-custom-faq-container .accordion-collapse").each(function() {
-                            $(this).removeClass("show").attr("aria-expanded", "false");
+                        // Reset state
+                        var $container = $(".wp-custom-faq-container");
+                        $container.find(".accordion-collapse").each(function() {
+                            $(this)
+                                .removeClass("show")
+                                .attr("aria-expanded", "false")
+                                .removeAttr("data-bs-parent")
+                                .css({ display: "none" });
                         });
-                        $(".wp-custom-faq-container .accordion-button").each(function() {
-                            $(this).addClass("collapsed").attr("aria-expanded", "false");
+                        $container.find(".accordion-button").each(function() {
+                            var $btn = $(this);
+                            $btn.addClass("collapsed").attr("aria-expanded", "false");
+                            var target = $btn.attr("data-bs-target") || $btn.attr("data-target") || $btn.attr("data-wpfaq-target");
+                            if (target) {
+                                $btn.attr("data-wpfaq-target", target);
+                            }
+                            // Remove Bootstrap toggler attributes to prevent double-handling
+                            $btn.removeAttr("data-bs-toggle").removeAttr("data-toggle");
                         });
-                        if (typeof bootstrap === "undefined") {
-                            console.error("wp_Custom_faq: Bootstrap 5.3 is not loaded. Check for conflicts with other plugins or themes.");
-                        }
+
+                        // Our conflict-free toggler using a capture-phase native listener to beat other handlers
+                            var handleAccordionClick = function(e) {
+                                var btn = e.target.closest(".accordion-button");
+                                // Ensure the button exists and belongs to the specific container this handler is bound to
+                                if (!btn || !this.contains(btn)) {
+                                    return;
+                                }
+                                e.preventDefault();
+                                e.stopImmediatePropagation();
+                                e.stopPropagation();
+
+                                var targetSelector = btn.getAttribute("data-wpfaq-target");
+                                if (!targetSelector) return false;
+                                var collapse = this.querySelector(targetSelector);
+                                if (!collapse) return false;
+
+                                var accordion = btn.closest(".accordion");
+                                if (accordion) {
+                                    accordion.querySelectorAll(".accordion-collapse.show").forEach(function(openEl) {
+                                        if (openEl !== collapse) {
+                                            openEl.classList.remove("show");
+                                            openEl.setAttribute("aria-expanded", "false");
+                                            var openId = openEl.id;
+                                            if (openId) {
+                                                var assocBtn = accordion.querySelector("[data-wpfaq-target=\"#" + openId + "\"]");
+                                                if (assocBtn) {
+                                                    assocBtn.classList.add("collapsed");
+                                                    assocBtn.setAttribute("aria-expanded", "false");
+                                                }
+                                            }
+                                            // Fallback display control when theme CSS overrides Bootstrap collapse
+                                            if (getComputedStyle(openEl).display !== "none") {
+                                                openEl.style.display = "none";
+                                            }
+                                        }
+                                    });
+                                }
+
+                                if (collapse.classList.contains("show")) {
+                                    collapse.classList.remove("show");
+                                    collapse.setAttribute("aria-expanded", "false");
+                                    btn.classList.add("collapsed");
+                                    btn.setAttribute("aria-expanded", "false");
+                                    if (getComputedStyle(collapse).display !== "none") {
+                                        collapse.style.display = "none";
+                                    }
+                                } else {
+                                    collapse.classList.add("show");
+                                    collapse.setAttribute("aria-expanded", "true");
+                                    btn.classList.remove("collapsed");
+                                    btn.setAttribute("aria-expanded", "true");
+                                    collapse.style.display = "block";
+                                }
+                                return false;
+                            };
+                        // Bind to each container instance to support multiple shortcodes on a page
+                        $container.each(function() {
+                            this.addEventListener("click", handleAccordionClick, true);
+                        });
                     } catch (e) {
                         console.error("wp_Custom_faq: Error initializing accordion - " + e.message);
                     }
@@ -147,8 +290,22 @@ function wp_custom_faq_register_options() {
         'default' => '#000000',
         'sanitize_callback' => 'sanitize_hex_color'
     ]);
+    register_setting('wp_custom_faq_settings_group', 'wp_custom_faq_answer_bg', [
+        'default' => '',
+        'sanitize_callback' => 'wp_custom_faq_sanitize_optional_hex'
+    ]);
 }
 add_action('admin_init', 'wp_custom_faq_register_options');
+
+// Allow empty string or valid hex color
+function wp_custom_faq_sanitize_optional_hex($value) {
+    $value = is_string($value) ? trim($value) : '';
+    if ($value === '') {
+        return '';
+    }
+    $hex = sanitize_hex_color($value);
+    return $hex ? $hex : '';
+}
 
 // Sanitize FAQ items
 function wp_custom_faq_sanitize_items($input) {
@@ -201,6 +358,7 @@ function wp_custom_faq_settings_page() {
             $expanded_bg = get_option('wp_custom_faq_expanded_bg', '#9bc329');
             $expanded_text = get_option('wp_custom_faq_expanded_text', '#ffffff');
             $icon_color = get_option('wp_custom_faq_icon_color', '#000000');
+            $answer_bg = get_option('wp_custom_faq_answer_bg', '');
             ?>
             <h2>FAQ Items</h2>
             <div id="faq-items">
@@ -282,6 +440,11 @@ function wp_custom_faq_settings_page() {
                 <label>Icon Color:</label>
                 <input type="text" name="wp_custom_faq_icon_color" value="<?php echo esc_attr($icon_color); ?>" class="color-field">
             </p>
+            <p>
+                <label>Answer Background Color (optional):</label>
+                <input type="text" name="wp_custom_faq_answer_bg" value="<?php echo esc_attr($answer_bg); ?>" class="color-field" placeholder="#ffffff or leave empty">
+                <br><small>Leave empty to keep default background.</small>
+            </p>
             
             <?php submit_button(); ?>
         </form>
@@ -324,8 +487,10 @@ function wp_custom_faq_settings_page() {
                 $(this).closest('.faq-item').remove();
             });
 
-            // Initialize color picker
-            $('.color-field').wpColorPicker();
+            // Initialize color picker (guarded to avoid conflicts)
+            if ($.fn && typeof $.fn.wpColorPicker === 'function') {
+                $('.color-field').wpColorPicker();
+            }
         });
     </script>
     <?php
@@ -335,7 +500,7 @@ function wp_custom_faq_settings_page() {
 function wp_custom_faq_admin_assets($hook) {
     if ($hook === 'settings_page_wp-custom-faq') {
         wp_enqueue_style('wp-color-picker');
-        wp_enqueue_script('wp-color-picker', admin_url('js/color-picker.min.js'), ['jquery'], null, true);
+        wp_enqueue_script('wp-color-picker');
     }
 }
 add_action('admin_enqueue_scripts', 'wp_custom_faq_admin_assets');
@@ -346,8 +511,8 @@ function wp_custom_faq_shortcode() {
     $accordion_id = 'wpCustomFaqAccordion' . wp_generate_uuid4();
     ob_start();
     ?>
-    <div class="wp-custom-faq-wrapper">
-        <div class="wp-custom-faq-container">
+    <div class="wp-custom-faq-wrapper tw-w-full">
+        <div class="wp-custom-faq-container tw-max-w-3xl tw-mx-auto tw-space-y-2">
             <div class="container">
                 <div class="accordion" id="<?php echo esc_attr($accordion_id); ?>">
                     <?php
@@ -356,8 +521,8 @@ function wp_custom_faq_shortcode() {
                         ?>
                         <div class="accordion-item">
                             <h2 class="accordion-header" id="heading<?php echo esc_attr($unique_id); ?>">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#collapse<?php echo esc_attr($unique_id); ?>" aria-expanded="false"
+                                <button class="accordion-button collapsed tw-text-base tw-font-semibold tw-pr-10" type="button"
+                                    data-wpfaq-target="#collapse<?php echo esc_attr($unique_id); ?>" aria-expanded="false"
                                     aria-controls="collapse<?php echo esc_attr($unique_id); ?>">
                                     <?php
                                         $q = (string) $item['question'];
@@ -369,8 +534,8 @@ function wp_custom_faq_shortcode() {
                                 </button>
                             </h2>
                             <div id="collapse<?php echo esc_attr($unique_id); ?>" class="accordion-collapse collapse"
-                                aria-labelledby="heading<?php echo esc_attr($unique_id); ?>" data-bs-parent="#<?php echo esc_attr($accordion_id); ?>">
-                                <div class="accordion-body">
+                                aria-labelledby="heading<?php echo esc_attr($unique_id); ?>">
+                                <div class="accordion-body tw-text-gray-900 tw-leading-relaxed">
                                     <?php echo wp_kses_post($item['answer']); ?>
                                 </div>
                             </div>
